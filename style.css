@@ -285,7 +285,7 @@ html{overflow-x:hidden}
 .sidebar-group{margin-bottom:var(--sp-4)}
 .sidebar-group-label{
   display:block;text-transform:uppercase;font-size:11px;font-weight:600;
-  color:var(--txt2);letter-spacing:1px;padding:var(--sp-2) var(--sp-4);
+  color:var(--txt);letter-spacing:1px;padding:var(--sp-2) var(--sp-4);
   white-space:nowrap;overflow:hidden;
   opacity:1;transition:opacity var(--dur-fast);
 }
@@ -417,7 +417,7 @@ body.sidebar-collapsed .app-wrapper{margin-left:84px}
   margin:0 0 2px;
 }
 .filters-subtitle{
-  font:400 13px/18px var(--font);color:var(--txt2);margin:0;
+  font:400 13px/18px var(--font);color:var(--txt);margin:0;
 }
 .filters-toggle{
   width:32px;height:32px;border-radius:var(--r-xs);border:0.5px solid var(--brd);
@@ -576,7 +576,9 @@ body.sidebar-collapsed .app-wrapper{margin-left:84px}
   content:'';position:absolute;top:0;left:0;right:0;height:40%;
   background:linear-gradient(180deg,var(--inner-glow),transparent);
   pointer-events:none;border-radius:var(--r) var(--r) 0 0;
+  z-index:0;
 }
+.card>*{position:relative;z-index:2}
 
 /* Reveal animation */
 [data-reveal]{opacity:0;transform:translateY(16px);transition:opacity var(--dur-slow) var(--ease),transform var(--dur-slow) var(--ease-spring)}
@@ -650,7 +652,7 @@ body.sidebar-collapsed .app-wrapper{margin-left:84px}
 .tbl{width:100%;min-width:700px;border-collapse:separate;border-spacing:0;table-layout:fixed}
 .tbl th{
   padding:var(--sp-3) var(--sp-4);text-align:left;
-  font:500 12px/16px var(--font);color:var(--txt2);
+  font:500 12px/16px var(--font);color:var(--txt);
   border-bottom:0.5px solid var(--sep);background:var(--tbl-th);
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
   position:sticky;top:0;z-index:2;
@@ -1723,7 +1725,7 @@ input:focus-visible,
 }
 .bv2-hero-greeting{
   font:500 13px/1.4 var(--font);
-  color:var(--txt2);
+  color:var(--txt);
   letter-spacing:.02em;
   margin-bottom:var(--sp-1);
 }
@@ -1735,7 +1737,7 @@ input:focus-visible,
 }
 .bv2-hero-sub{
   font:400 13px/1.5 var(--font);
-  color:var(--txt2);
+  color:var(--txt);
   max-width:320px;
   margin-bottom:var(--sp-4);
 }
