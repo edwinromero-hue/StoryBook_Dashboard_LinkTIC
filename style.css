@@ -643,17 +643,22 @@ body.sidebar-collapsed .app-wrapper{margin-left:84px}
 .cw-lg{height:280px}
 .cw canvas{width:100%!important;max-width:100%!important;height:100%!important}
 
+/* Chart cards in grids — flex column so .cw fills available height */
+.grid .card:has(> .cw){display:flex;flex-direction:column}
+.grid .card > .cw{flex:1;min-height:240px;height:auto}
+
 /* ========== TABLE ========== */
 .card-table{padding:0;overflow:hidden}
 .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .tbl-scroll::-webkit-scrollbar{height:4px}
 .tbl-scroll::-webkit-scrollbar-track{background:transparent}
 .tbl-scroll::-webkit-scrollbar-thumb{background:var(--fill);border-radius:4px}
-.tbl{width:100%;min-width:700px;border-collapse:separate;border-spacing:0;table-layout:fixed}
+.tbl{width:100%;min-width:700px;border-collapse:collapse;table-layout:fixed}
 .tbl th{
   padding:var(--sp-3) var(--sp-4);text-align:left;
   font:500 12px/16px var(--font);color:var(--txt);
-  border-bottom:0.5px solid var(--sep);background:var(--tbl-th);
+  border-bottom:none;background:var(--tbl-th);
+  box-shadow:inset 0 -0.5px 0 var(--sep);
   backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
   position:sticky;top:0;z-index:2;
 }
@@ -1976,7 +1981,7 @@ input:focus-visible,
   display:flex;
   flex-direction:column;
 }
-.bv2-chart-large .cw{flex:1;min-height:220px}
+.bv2-chart-large .cw{flex:1;min-height:220px;height:auto}
 .bv2-chart-footer{
   display:flex;
   align-items:center;

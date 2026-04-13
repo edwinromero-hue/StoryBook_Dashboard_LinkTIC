@@ -153,9 +153,10 @@ document.querySelectorAll('.bf').forEach(b => { const w = b.style.width; b.style
 
 // ===== SPARKLINES =====
 function spark(cvs, data, color) {
-  if (!cvs.dataset.origW) { cvs.dataset.origW = cvs.width; cvs.dataset.origH = cvs.height; }
-  const w = +cvs.dataset.origW, h = +cvs.dataset.origH, dpr = devicePixelRatio || 1;
-  cvs.width = w * dpr; cvs.height = h * dpr; cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
+  const dpr = devicePixelRatio || 1;
+  const w = cvs.clientWidth || 200, h = cvs.clientHeight || 32;
+  if (w === 0) return;
+  cvs.width = w * dpr; cvs.height = h * dpr;
   const ctx = cvs.getContext('2d');
   ctx.scale(dpr, dpr); ctx.clearRect(0, 0, w, h);
   const mx = Math.max(...data), mn = Math.min(...data), rng = mx - mn || 1, step = w / (data.length - 1);
@@ -172,6 +173,15 @@ function spark(cvs, data, color) {
   ctx.beginPath(); ctx.arc(l.x, l.y, 1.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
 }
 document.querySelectorAll('[data-spark]').forEach(c => spark(c, c.dataset.spark.split(',').map(Number), c.dataset.color || '#007AFF'));
+
+// Redraw sparklines on resize
+let _sparkResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_sparkResizeTimer);
+  _sparkResizeTimer = setTimeout(() => {
+    document.querySelectorAll('[data-spark]').forEach(c => spark(c, c.dataset.spark.split(',').map(Number), c.dataset.color || '#007AFF'));
+  }, 150);
+});
 
 // ===== CHARTS =====
 const PD = {
@@ -235,9 +245,9 @@ function buildCharts() {
   charts.deploy = new Chart(document.getElementById('deployChart'), {
     type: 'line', data: {
       labels: MO, datasets: [
-        { label: 'Prod', data: [18, 22, 28, 35, 42, 48], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 2, fill: true, tension: .4, pointRadius: 2 },
-        { label: 'Stage', data: [45, 52, 60, 68, 75, 82], borderColor: '#5856D6', backgroundColor: CF.indigo, borderWidth: 1.5, fill: true, tension: .4, pointRadius: 2 },
-        { label: 'Rollback', data: [3, 2, 4, 1, 2, 1], borderColor: '#FF3B30', backgroundColor: CF.red, borderWidth: 1, fill: true, tension: .4, pointRadius: 2 }
+        { label: 'Stage', data: [45, 52, 60, 68, 75, 82], borderColor: '#5856D6', backgroundColor: CF.indigo, borderWidth: 1.5, fill: 'origin', tension: .4, pointRadius: 3, pointBackgroundColor: '#5856D6', order: 3 },
+        { label: 'Prod', data: [18, 22, 28, 35, 42, 48], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 2, fill: 'origin', tension: .4, pointRadius: 3, pointBackgroundColor: '#007AFF', order: 2 },
+        { label: 'Rollback', data: [3, 2, 4, 1, 2, 1], borderColor: '#FF3B30', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: .4, pointRadius: 3, pointBackgroundColor: '#FF3B30', order: 1 }
       ]
     }, options: o
   });
@@ -245,9 +255,9 @@ function buildCharts() {
   charts.bug = new Chart(document.getElementById('bugChart'), {
     type: 'line', data: {
       labels: MO, datasets: [
-        { label: 'Crit', data: [12, 8, 10, 6, 4, 3], borderColor: '#FF3B30', backgroundColor: CF.red, borderWidth: 1.5, fill: true, tension: .3 },
-        { label: 'Major', data: [28, 25, 22, 18, 15, 12], borderColor: '#FF9500', backgroundColor: CF.orange, borderWidth: 1.5, fill: true, tension: .3 },
-        { label: 'Minor', data: [45, 42, 38, 35, 30, 28], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 1.5, fill: true, tension: .3 }
+        { label: 'Crit', data: [12, 8, 10, 6, 4, 3], borderColor: '#FF3B30', backgroundColor: CF.red, borderWidth: 1.5, fill: 'origin', tension: .3 },
+        { label: 'Major', data: [28, 25, 22, 18, 15, 12], borderColor: '#FF9500', backgroundColor: CF.orange, borderWidth: 1.5, fill: '-1', tension: .3 },
+        { label: 'Minor', data: [45, 42, 38, 35, 30, 28], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 1.5, fill: '-1', tension: .3 }
       ]
     }, options: { ...o, scales: { ...o.scales, y: { ...o.scales.y, stacked: true } } }
   });
@@ -260,8 +270,8 @@ function buildCharts() {
   charts.rev = new Chart(document.getElementById('revenueChart'), {
     type: 'line', data: {
       labels: ['Q1-24', 'Q2-24', 'Q3-24', 'Q4-24', 'Q1-25'], datasets: [
-        { label: 'Rev/Emp (K)', data: [28, 31, 29, 34, 38], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 2, fill: true, tension: .4, pointRadius: 3, pointBackgroundColor: '#007AFF', pointBorderColor: c.pb, pointBorderWidth: 2 },
-        { label: 'Cost/Emp (K)', data: [22, 23, 22, 24, 25], borderColor: '#AF52DE', backgroundColor: CF.purple, borderWidth: 1.5, fill: true, tension: .4, pointRadius: 2, borderDash: [4, 4] }
+        { label: 'Rev/Emp (K)', data: [28, 31, 29, 34, 38], borderColor: '#007AFF', backgroundColor: CF.blue, borderWidth: 2, fill: 'origin', tension: .4, pointRadius: 3, pointBackgroundColor: '#007AFF', pointBorderColor: c.pb, pointBorderWidth: 2, order: 2 },
+        { label: 'Cost/Emp (K)', data: [22, 23, 22, 24, 25], borderColor: '#AF52DE', backgroundColor: 'transparent', borderWidth: 2, fill: false, tension: .4, pointRadius: 3, pointBackgroundColor: '#AF52DE', borderDash: [4, 4], order: 1 }
       ]
     }, options: o
   });
@@ -1867,7 +1877,7 @@ function renderWidgetHTML(widgetId) {
         <span class="kpi-val">${w.value}</span>
         ${w.trend ? '<span class="kpi-trend ' + w.trendClass + '">' + w.trend + '</span>' : ''}
       </div>
-      <canvas class="kpi-spark" id="${canvasId}" data-spark="${w.sparkData}" data-color="${w.sparkColor}" width="200" height="24"></canvas>
+      <canvas class="kpi-spark" id="${canvasId}" data-spark="${w.sparkData}" data-color="${w.sparkColor}"></canvas>
     </div>`;
   }
 
@@ -2475,7 +2485,7 @@ function renderCatalogGrid() {
             borderSkipped: false,
             barPercentage: 0.6,
             categoryPercentage: 0.7,
-            order: 2
+            order: 1
           },
           {
             label: 'Proyeccion',
@@ -2491,7 +2501,7 @@ function renderCatalogGrid() {
             pointBorderColor: c.pb,
             pointBorderWidth: 2,
             pointHoverRadius: 7,
-            order: 1
+            order: 2
           }
         ]
       },
@@ -2568,12 +2578,12 @@ function renderCatalogGrid() {
             {
               label: 'Ingresos', data: [3200, 4100, 3800, 5200, 4600, 5800],
               backgroundColor: TM.dark() ? '#1A4D8A' : '#A3CDFF',
-              borderColor: TM.dark() ? '#2E6FBF' : '#5AA0F0', borderWidth: 1, borderRadius: 8, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7, order: 2
+              borderColor: TM.dark() ? '#2E6FBF' : '#5AA0F0', borderWidth: 1, borderRadius: 8, borderSkipped: false, barPercentage: 0.6, categoryPercentage: 0.7, order: 1
             },
             {
               label: 'Proyeccion', type: 'line', data: [2800, 3600, 3200, 4800, 4200, 5400],
               borderColor: '#FF9500', backgroundColor: TM.dark() ? '#2A1E08' : '#FFF8ED', borderWidth: 2, fill: true, tension: 0.4,
-              pointRadius: 4, pointBackgroundColor: '#FF9500', pointBorderColor: c2.pb, pointBorderWidth: 2, pointHoverRadius: 7, order: 1
+              pointRadius: 4, pointBackgroundColor: '#FF9500', pointBorderColor: c2.pb, pointBorderWidth: 2, pointHoverRadius: 7, order: 2
             }
           ]
         },
