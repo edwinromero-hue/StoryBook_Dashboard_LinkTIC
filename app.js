@@ -488,7 +488,6 @@ buildCharts();
       applyBtn.textContent = 'Aplicado';
       applyBtn.style.background = '#34C759';
       setTimeout(() => { applyBtn.textContent = 'Aplicar'; applyBtn.style.background = '' }, 1200);
-      console.log('Filtros aplicados:', active);
     });
   }
 
@@ -2278,7 +2277,6 @@ function renderCatalogGrid() {
       { id:4, name:"Sofia Ramirez",   role:"Data Engineer",   dept:"Data",        attend:97, hrs:9.1, punct:97, entry:"07:45", projects:["Data Analytics","Backend API"],   color:"#DDD6FE", pos:[-5.0, -2.5, 0.5] },
       { id:5, name:"Diego Lopez",     role:"QA Lead",         dept:"Quality",     attend:99, hrs:9.3, punct:98, entry:"08:00", projects:["QA & Testing","Plataforma Web"],  color:"#8B5CF6", pos:[0.0, -4.5, -0.3] }
     ];
-    var CONNECTIONS = [[0,2],[0,3],[1,3],[2,0],[3,4],[4,3],[5,0],[0,1],[1,5],[2,5],[4,5]];
     var ACTIVE_USER = PEOPLE[0];
 
     // ── Renderer ──

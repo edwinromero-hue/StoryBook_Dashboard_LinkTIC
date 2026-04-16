@@ -11,7 +11,8 @@
       "Bash(curl -s -L -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/public/theme/styles.css?v=1.0.47\" -o /tmp/maze_styles.css)",
       "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://maze.co/\" -o /tmp/maze_home.html)",
       "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/\" -o /tmp/mazehq_home.html)",
-      "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/public/theme/styles.css?v=1.0.47\" -o /tmp/maze_styles.css)"
+      "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/public/theme/styles.css?v=1.0.47\" -o /tmp/maze_styles.css)",
+      "Bash(find /Users/usuario1/Desktop/Dashboard_4 -maxdepth 2 -type d ! -path \"*/.git*\" -exec basename {} \\\\;)"
     ]
   }
 }
