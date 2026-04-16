@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m http.server 8081)",
+      "Bash(open http://localhost:8081/#overview)",
+      "Bash(open \"http://localhost:8081/#overview\")",
+      "WebFetch(domain:es.bequant.com)",
+      "WebFetch(domain:www.awwwards.com)",
+      "WebFetch(domain:mazehq.com)",
+      "Bash(curl -s -L -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/\" -o /tmp/maze_index.html)",
+      "Bash(curl -s -L -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/public/theme/styles.css?v=1.0.47\" -o /tmp/maze_styles.css)",
+      "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://maze.co/\" -o /tmp/maze_home.html)",
+      "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/\" -o /tmp/mazehq_home.html)",
+      "Bash(curl -L -s --max-time 30 -A \"Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://mazehq.com/public/theme/styles.css?v=1.0.47\" -o /tmp/maze_styles.css)"
+    ]
+  }
+}

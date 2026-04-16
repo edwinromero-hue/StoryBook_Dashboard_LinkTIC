@@ -38,6 +38,15 @@ const TM = {
       for (let i = 0; i < ca.count; i++) { const c = newPal[Math.floor(Math.random() * newPal.length)]; ca.array[i * 3] = c[0]; ca.array[i * 3 + 1] = c[1]; ca.array[i * 3 + 2] = c[2] }
       ca.needsUpdate = true;
     }
+    // Neural scene theme update
+    if (window._neuralScene) {
+      var ns = window._neuralScene;
+      // canvas is transparent — bg color comes from CSS + glow divs
+      ns.blobMat.blending = dk ? THREE.AdditiveBlending : THREE.NormalBlending;
+      ns.blobMat.uniforms.uColor.value.set(dk ? 0x22D0DF : 0x0A8A96);
+      ns.blobMat.uniforms.uColor2.value.set(dk ? 0x2FD48D : 0x1A9060);
+      ns.blobMat.needsUpdate = true;
+    }
     // Map tiles
     if (window._lincMap && window._lincTileLayer) {
       window._lincMap.removeLayer(window._lincTileLayer);
@@ -577,6 +586,17 @@ function switchView(targetId, pushState = true) {
     // Render control panel if switching to it
     if (targetId === 'control-panel') {
       setTimeout(() => renderControlPanel(), 50);
+    }
+    // Neural constellation: pause bg-canvas when on overview, resume when leaving
+    if (targetId === 'overview') {
+      var bgCvs = document.getElementById('bg-canvas');
+      if (bgCvs) bgCvs.style.opacity = '0';
+      if (window._neuralResume) window._neuralResume();
+      if (window._neuralEntrance) setTimeout(window._neuralEntrance, 100);
+    } else {
+      var bgCvs2 = document.getElementById('bg-canvas');
+      if (bgCvs2) bgCvs2.style.opacity = '';
+      if (window._neuralPause) window._neuralPause();
     }
   }, 50);
 
@@ -1735,6 +1755,11 @@ TM.init();
     if (initialView === 'control-panel') {
       setTimeout(() => renderControlPanel(), 50);
     }
+    // Hide bg-canvas if overview is active (neural constellation takes over)
+    if (initialView === 'overview') {
+      var bgCvs = document.getElementById('bg-canvas');
+      if (bgCvs) bgCvs.style.opacity = '0';
+    }
   }, 100);
 })();
 
@@ -2238,95 +2263,588 @@ function renderCatalogGrid() {
     svg.insertBefore(defs, svg.firstChild);
   })();
 
-  // ===== THREE.JS — Hero Particle Wave =====
-  (function initHeroCanvas() {
-    const cvs = document.getElementById('heroCanvas');
-    if (!cvs || typeof THREE === 'undefined') return;
-    // Respect prefers-reduced-motion
+  // ===== THREE.JS — Neural Constellation (Overview Immersive) =====
+  (function initNeuralConstellation() {
+    var cvs = document.getElementById('neuralCanvas');
+    if (!cvs || typeof THREE === 'undefined' || typeof gsap === 'undefined') return;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { cvs.style.display = 'none'; return; }
 
-    const renderer = new THREE.WebGLRenderer({ canvas: cvs, alpha: true, antialias: true });
-    const rect = cvs.parentElement.getBoundingClientRect();
-    renderer.setSize(rect.width, rect.height);
+    // ── PERSON Data ──
+    var PEOPLE = [
+      { id:0, name:"Ana Castillo",    role:"Lead Developer",  dept:"Engineering", attend:98, hrs:9.2, punct:96, entry:"07:55", projects:["Plataforma Web","App Mobile"],   color:"#C4B5FD", pos:[0, 0, 0] },
+      { id:1, name:"Carlos Mendez",   role:"DevOps Engineer", dept:"Operations",  attend:96, hrs:9.5, punct:92, entry:"08:02", projects:["Infraestructura","DevOps"],       color:"#A78BFA", pos:[4.5, 2.5, -0.5] },
+      { id:2, name:"Maria Torres",    role:"UX Designer",     dept:"Design",      attend:95, hrs:8.8, punct:90, entry:"08:15", projects:["UX/UI Design","App Mobile"],      color:"#E9D5FF", pos:[-4.5, 2.0, 0.8] },
+      { id:3, name:"Juan Perez",      role:"Backend Dev",     dept:"Engineering", attend:91, hrs:9.3, punct:85, entry:"08:30", projects:["Backend API","Data Analytics"],    color:"#818CF8", pos:[5.5, -2.0, -1.0] },
+      { id:4, name:"Sofia Ramirez",   role:"Data Engineer",   dept:"Data",        attend:97, hrs:9.1, punct:97, entry:"07:45", projects:["Data Analytics","Backend API"],   color:"#DDD6FE", pos:[-5.0, -2.5, 0.5] },
+      { id:5, name:"Diego Lopez",     role:"QA Lead",         dept:"Quality",     attend:99, hrs:9.3, punct:98, entry:"08:00", projects:["QA & Testing","Plataforma Web"],  color:"#8B5CF6", pos:[0.0, -4.5, -0.3] }
+    ];
+    var CONNECTIONS = [[0,2],[0,3],[1,3],[2,0],[3,4],[4,3],[5,0],[0,1],[1,5],[2,5],[4,5]];
+    var ACTIVE_USER = PEOPLE[0];
+
+    // ── Renderer ──
+    // ── Renderer ──
+    var ovEl = document.getElementById('overview');
+    var ovRect = ovEl ? ovEl.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+    var W = ovRect.width || window.innerWidth, H = ovRect.height || window.innerHeight;
+    var renderer = new THREE.WebGLRenderer({ canvas: cvs, alpha: true, antialias: true });
+    renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    var dk = TM.dark();
+    renderer.setClearColor(0x000000, 0);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, rect.width / rect.height, .1, 500);
-    camera.position.set(0, 5, 18);
-    camera.lookAt(0, 0, 0);
+    // ── Scene & Camera ──
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
+    var camDefault = new THREE.Vector3(0, 0, 28);
+    var camTarget = new THREE.Vector3(0, 0, 0);
+    var camTargetGoal = new THREE.Vector3(0, 0, 0);
+    camera.position.copy(camDefault);
+    camera.lookAt(camTarget);
 
-    // Particle field
-    const count = 400;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
-    const dk = TM.dark();
-    const palette = dk
-      ? [[0.04, 0.52, 1], [0.37, 0.36, 0.9], [0.75, 0.35, 0.95], [0.19, 0.82, 0.35]]
-      : [[0, 0.48, 1], [0.34, 0.34, 0.84], [0.69, 0.32, 0.87], [0.35, 0.55, 0.8]];
+    // ── Lights ──
+    scene.add(new THREE.AmbientLight(0x1a1530, 0.6));
 
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 40;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
-      const c = palette[Math.floor(Math.random() * palette.length)];
-      colors[i * 3] = c[0]; colors[i * 3 + 1] = c[1]; colors[i * 3 + 2] = c[2];
-      sizes[i] = Math.random() * 2 + 0.5;
+    // ── Aurora Blob (Maze-style FBM particle sphere) ──
+    var BLOB_COUNT = 4000;
+    var blobGeo = new THREE.BufferGeometry();
+    var blobPos = new Float32Array(BLOB_COUNT * 3);
+    var blobAlpha = new Float32Array(BLOB_COUNT);
+    var blobSpeed = new Float32Array(BLOB_COUNT);
+    for (var i = 0; i < BLOB_COUNT; i++) {
+      // Distribute on sphere surface
+      var theta = Math.random() * Math.PI * 2;
+      var phi = Math.acos(2 * Math.random() - 1);
+      var r = 7 + Math.random() * 2.5;
+      blobPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+      blobPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+      blobPos[i*3+2] = r * Math.cos(phi);
+      blobAlpha[i] = 0.3 + Math.random() * 0.7;
+      blobSpeed[i] = 0.5 + Math.random() * 1.5;
     }
+    blobGeo.setAttribute('position', new THREE.BufferAttribute(blobPos, 3));
+    blobGeo.setAttribute('aAlpha', new THREE.BufferAttribute(blobAlpha, 1));
+    blobGeo.setAttribute('aSpeed', new THREE.BufferAttribute(blobSpeed, 1));
 
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-    const mat = new THREE.PointsMaterial({
-      size: 1.2,
-      vertexColors: true,
+    var blobMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: (function() {
+          var score = (ACTIVE_USER.attend + ACTIVE_USER.punct) / 2;
+          if (dk) {
+            if (score >= 90) return new THREE.Color(0x22D0DF);
+            if (score >= 75) return new THREE.Color(0xE19C1B);
+            return new THREE.Color(0xE42269);
+          } else {
+            if (score >= 90) return new THREE.Color(0x0A8A96);
+            if (score >= 75) return new THREE.Color(0x9A6A10);
+            return new THREE.Color(0x9A1845);
+          }
+        })() },
+        uColor2: { value: (function() {
+          var score = (ACTIVE_USER.attend + ACTIVE_USER.punct) / 2;
+          if (dk) {
+            if (score >= 90) return new THREE.Color(0x2FD48D); // green accent
+            if (score >= 75) return new THREE.Color(0xE42269); // red warning
+            return new THREE.Color(0xFF4444);
+          } else {
+            if (score >= 90) return new THREE.Color(0x1A9060);
+            if (score >= 75) return new THREE.Color(0x9A1845);
+            return new THREE.Color(0xAA2222);
+          }
+        })() },
+        uAmplitude: { value: 1.2 }
+      },
+      vertexShader: [
+        'attribute float aAlpha;',
+        'attribute float aSpeed;',
+        'uniform float uTime;',
+        'uniform float uAmplitude;',
+        'varying float vAlpha;',
+        'varying float vDist;',
+        'varying float vNoise;',
+        // Simple 3D noise
+        'vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}',
+        'vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}',
+        'vec4 perm(vec4 x){return mod289(((x*34.0)+1.0)*x);}',
+        'float noise(vec3 p){',
+        '  vec3 a=floor(p);vec3 d=p-a;d=d*d*(3.0-2.0*d);',
+        '  vec4 b=a.xxyy+vec4(0.0,1.0,0.0,1.0);',
+        '  vec4 k1=perm(b.xyxy);vec4 k2=perm(k1.xyxy+b.zzww);',
+        '  vec4 c=k2+a.zzzz;vec4 k3=perm(c);vec4 k4=perm(c+1.0);',
+        '  vec4 o1=fract(k3*(1.0/41.0));vec4 o2=fract(k4*(1.0/41.0));',
+        '  vec4 o3=o2*d.z+o1*(1.0-d.z);',
+        '  vec2 o4=o3.yw*d.x+o3.xz*(1.0-d.x);',
+        '  return o4.y*d.y+o4.x*(1.0-d.y);',
+        '}',
+        'float fbm(vec3 p){',
+        '  float v=0.0;float a=0.5;',
+        '  for(int i=0;i<4;i++){v+=a*noise(p);p*=2.0;a*=0.5;}',
+        '  return v;',
+        '}',
+        'void main(){',
+        '  vec3 p=position;',
+        '  float n=fbm(p*0.3+uTime*0.15*aSpeed);',
+        '  vNoise=n;',
+        '  p*=(1.0+uAmplitude*n*0.4);',
+        '  p+=normal*n*1.5;',
+        '  vec4 mv=modelViewMatrix*vec4(p,1.0);',
+        '  vDist=-mv.z;',
+        '  vAlpha=aAlpha*(160.0/vDist);',
+        '  gl_Position=projectionMatrix*mv;',
+        '  gl_PointSize=max(0.8,(1.5+n*1.5)*(90.0/vDist));',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor;',
+        'uniform vec3 uColor2;',
+        'uniform float uTime;',
+        'varying float vAlpha;',
+        'varying float vDist;',
+        'varying float vNoise;',
+        'void main(){',
+        '  float d=length(gl_PointCoord-vec2(0.5));',
+        '  if(d>0.5)discard;',
+        '  float wave=sin(uTime*1.5+vNoise*6.0)*0.5+0.5;',
+        '  vec3 col=mix(uColor,uColor2,wave);',
+        '  float a=smoothstep(0.5,0.0,d)*vAlpha*0.3;',
+        '  gl_FragColor=vec4(col,a);',
+        '}'
+      ].join('\n'),
       transparent: true,
-      opacity: dk ? 0.6 : 0.35,
-      blending: dk ? THREE.AdditiveBlending : THREE.NormalBlending,
-      sizeAttenuation: true,
-      depthWrite: false
+      depthWrite: false,
+      blending: dk ? THREE.AdditiveBlending : THREE.NormalBlending
     });
 
-    const points = new THREE.Points(geo, mat);
-    scene.add(points);
+    // Compute normals for displacement
+    var sphereRef = new THREE.SphereGeometry(7, 32, 32);
+    var normArr = sphereRef.getAttribute('position').array;
+    var blobNormals = new Float32Array(BLOB_COUNT * 3);
+    for (var i = 0; i < BLOB_COUNT; i++) {
+      var len = Math.sqrt(blobPos[i*3]*blobPos[i*3]+blobPos[i*3+1]*blobPos[i*3+1]+blobPos[i*3+2]*blobPos[i*3+2]);
+      blobNormals[i*3] = blobPos[i*3]/len;
+      blobNormals[i*3+1] = blobPos[i*3+1]/len;
+      blobNormals[i*3+2] = blobPos[i*3+2]/len;
+    }
+    blobGeo.setAttribute('normal', new THREE.BufferAttribute(blobNormals, 3));
 
-    // Store original positions for bounded animation
-    const origPositions = new Float32Array(positions);
+    var blobPoints = new THREE.Points(blobGeo, blobMat);
+    blobPoints.position.set(0, 0, -6);
+    blobPoints.scale.set(0.01, 0.01, 0.01); // start invisible
+    blobMat.uniforms.uAmplitude.value = 8.0; // start scattered
+    scene.add(blobPoints);
 
-    // Store reference for theme changes
-    window._heroParticles = { points: points, mat: mat, geo: geo };
+    // ── Scroll Reveal Observer (Maze: .is-below -> .is-in-view) ──
+    var revealEls = document.querySelectorAll('.ov-reveal');
+    var revealObs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting) e.target.classList.add('is-in-view');
+      });
+    }, { threshold: 0.15, root: document.getElementById('overview') });
+    revealEls.forEach(function(el) { revealObs.observe(el); });
 
-    let time = 0;
-    let heroAnimId;
-    function animate() {
-      heroAnimId = requestAnimationFrame(animate);
-      time += 0.003;
-      const pos = geo.getAttribute('position');
-      for (let i = 0; i < count; i++) {
-        // Use sine/cosine offsets from original positions to prevent unbounded drift
-        pos.array[i * 3] = origPositions[i * 3] + Math.cos(time + i * 0.05) * 1.5;
-        pos.array[i * 3 + 1] = origPositions[i * 3 + 1] + Math.sin(time + i * 0.1) * 1.2;
-      }
-      pos.needsUpdate = true;
-      points.rotation.y = time * 0.08;
+    // ── Mouse parallax ──
+    var mouseX = 0, mouseY = 0;
+    document.addEventListener('mousemove', function(e) {
+      mouseX = (e.clientX / W) * 2 - 1;
+      mouseY = -(e.clientY / H) * 2 + 1;
+    });
+
+    // ── Animation Loop ──
+    var neuralAnimId;
+    var neuralTime = 0;
+    var neuralRunning = true;
+    function animateNeural() {
+      neuralAnimId = requestAnimationFrame(animateNeural);
+      if (!neuralRunning) return;
+      neuralTime += 0.008;
+      blobMat.uniforms.uTime.value = neuralTime;
+      blobPoints.rotation.y = neuralTime * 0.05;
+      blobPoints.rotation.x = Math.sin(neuralTime * 0.1) * 0.1;
+      // Mouse parallax on camera
+      camera.position.x += (mouseX * 1.5 - camera.position.x) * 0.01;
+      camera.position.y += (mouseY * 1.0 - camera.position.y) * 0.01;
+      camTarget.lerp(camTargetGoal, 0.05);
+      camera.lookAt(camTarget);
       renderer.render(scene, camera);
     }
-    animate();
-    // Expose cleanup function for hero animation
-    window._cancelHeroAnim = function () { cancelAnimationFrame(heroAnimId); };
+    animateNeural();
 
-    // Handle resize
-    const ro = new ResizeObserver(entries => {
-      for (const e of entries) {
-        const w = e.contentRect.width, h = e.contentRect.height;
-        renderer.setSize(w, h);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
+    // ── Countup helper ──
+    function animateCountup(elId, target, suffix) {
+      var el = document.getElementById(elId);
+      if (!el) return;
+      gsap.to({ v: 0 }, { v: target, duration: 1.8, ease: 'power2.out', onUpdate: function() {
+        var val = this.targets()[0].v;
+        el.textContent = (target % 1 !== 0 ? val.toFixed(1) : Math.floor(val).toLocaleString()) + (suffix || '');
+      }});
+    }
+
+    // ── LOADING ANIMATION — Particles assemble into sphere ──
+    var loadingEl = document.getElementById('ovLoading');
+    var scrollEl = document.getElementById('ovScroll');
+    var loadFill = document.getElementById('ovLoadFill');
+    var loadPct = document.getElementById('ovLoadPct');
+    var loadLabel = document.getElementById('ovLoadLabel');
+    scrollEl.classList.add('loading');
+
+    var loadTl = gsap.timeline({
+      onUpdate: function() {
+        var p = Math.round(loadTl.progress() * 100);
+        if (loadFill) loadFill.style.width = p + '%';
+        if (loadPct) loadPct.textContent = p + '%';
+      },
+      onComplete: function() {
+        // Loading done — reveal content
+        if (loadLabel) loadLabel.textContent = 'LISTO';
+        setTimeout(function() {
+          loadingEl.classList.add('done');
+          scrollEl.classList.remove('loading');
+          // Trigger reveals
+          document.querySelectorAll('.ov-reveal').forEach(function(el) {
+            el.classList.add('is-in-view');
+          });
+          // Countups
+          animateCountup('naHeroHrs', ACTIVE_USER.hrs);
+          animateCountup('naHeroPunct', ACTIVE_USER.punct, '%');
+          animateCountup('naHeroAttend', ACTIVE_USER.attend, '%');
+          document.getElementById('naHeroProjects').textContent = ACTIVE_USER.projects.length;
+          animateCountup('ovHeroSprint', 78, '%');
+          animateCountup('ovHeroTeam', PEOPLE.length);
+          animateCountup('ovHeroDelivery', 87, '%');
+          animateCountup('ovHeroUptime', 99.97, '%');
+          // Bar fills
+          document.querySelectorAll('.ov-bar-fill').forEach(function(b) {
+            setTimeout(function() { b.style.width = b.dataset.w; }, 100);
+          });
+          // Show status banner
+          var banner = document.getElementById('ovBanner');
+          var bannerIcon = document.getElementById('ovBannerIcon');
+          var bannerText = document.getElementById('ovBannerText');
+          if (banner && bannerText && bannerIcon) {
+            if (showGood) {
+              banner.classList.add('ov-banner-good');
+              bannerIcon.textContent = '\u2713';
+              bannerText.textContent = 'Todo en orden \u2014 Tus metricas estan por encima del objetivo';
+            } else {
+              banner.classList.add('ov-banner-crit');
+              bannerIcon.textContent = '\u26A0';
+              bannerText.textContent = 'Atencion \u2014 2 proyectos en estado critico requieren seguimiento';
+            }
+            setTimeout(function() { banner.classList.add('visible'); }, 400);
+          }
+        }, 300);
       }
     });
-    ro.observe(cvs.parentElement);
+
+    // Color presets
+    var glowBlue1 = 'radial-gradient(ellipse,rgba(34,130,223,0.4) 0%,rgba(88,86,214,0.15) 40%,transparent 70%)';
+    var glowBlue2 = 'radial-gradient(ellipse,rgba(88,86,214,0.3) 0%,rgba(34,130,223,0.1) 40%,transparent 70%)';
+    var glowGreen1 = 'radial-gradient(ellipse,rgba(47,212,141,0.5) 0%,rgba(34,208,223,0.2) 40%,transparent 70%)';
+    var glowGreen2 = 'radial-gradient(ellipse,rgba(34,208,223,0.4) 0%,rgba(47,212,141,0.15) 40%,transparent 70%)';
+    var glowRed1 = 'radial-gradient(ellipse,rgba(228,34,105,0.5) 0%,rgba(255,68,68,0.2) 40%,transparent 70%)';
+    var glowRed2 = 'radial-gradient(ellipse,rgba(255,68,68,0.4) 0%,rgba(228,34,105,0.15) 40%,transparent 70%)';
+    var colorBlue = new THREE.Color(0x2282DF);
+    var colorBlueDim = new THREE.Color(0x5856D6);
+    var colorTeal = new THREE.Color(0x22D0DF);
+    var colorGreen = new THREE.Color(0x2FD48D);
+    var colorRed = new THREE.Color(0xE42269);
+    var colorRedBright = new THREE.Color(0xFF4444);
+
+    // Determine final state (alternates each reload)
+    var lastState = localStorage.getItem('ov-banner-state') || 'red';
+    var showGood = lastState === 'red';
+    localStorage.setItem('ov-banner-state', showGood ? 'green' : 'red');
+
+    // Start BLUE (neutral) during loading
+    blobMat.uniforms.uColor.value.copy(colorBlue);
+    blobMat.uniforms.uColor2.value.copy(colorBlueDim);
+    if (glow1) glow1.style.background = glowBlue1;
+    if (glow2) glow2.style.background = glowBlue2;
+
+    // Phase 1 (0-0.8s): Scatter from nothing — blue
+    loadTl.to(blobPoints.scale, { x: 2.5, y: 2.5, z: 2.5, duration: 0.8, ease: "power2.out" }, 0);
+    if (loadLabel) loadTl.add(function() { loadLabel.textContent = 'CARGANDO DATOS'; }, 0.2);
+
+    // Phase 2 (0.8-2.0s): Contract — still blue
+    loadTl.to(blobMat.uniforms.uAmplitude, { value: 3.0, duration: 1.2, ease: "power2.inOut" }, 0.8);
+    loadTl.to(blobPoints.scale, { x: 1.5, y: 1.5, z: 1.5, duration: 1.2, ease: "power2.inOut" }, 0.8);
+    if (loadLabel) loadTl.add(function() { loadLabel.textContent = 'PROCESANDO'; }, 1.4);
+
+    // Phase 3 (2.0-3.0s): Final contraction — still blue
+    loadTl.to(blobMat.uniforms.uAmplitude, { value: 1.2, duration: 1.0, ease: "power3.out" }, 2.0);
+    loadTl.to(blobPoints.scale, { x: 1, y: 1, z: 1, duration: 1.0, ease: "back.out(1.2)" }, 2.0);
+    if (loadLabel) loadTl.add(function() { loadLabel.textContent = 'ANALIZANDO'; }, 2.3);
+
+    // Phase 4 (3.0-3.3s): Settle
+    loadTl.to(blobMat.uniforms.uAmplitude, { value: 1.0, duration: 0.3, ease: "sine.out" }, 3.0);
+
+    // Phase 5 (3.3s): TRANSITION to final color (green or red)
+    loadTl.add(function() {
+      if (showGood) {
+        gsap.to(blobMat.uniforms.uColor.value, { r: colorTeal.r, g: colorTeal.g, b: colorTeal.b, duration: 1.2, ease: "power2.inOut" });
+        gsap.to(blobMat.uniforms.uColor2.value, { r: colorGreen.r, g: colorGreen.g, b: colorGreen.b, duration: 1.2, ease: "power2.inOut" });
+        if (glow1) gsap.to(glow1, { background: glowGreen1, duration: 0 }); glow1.style.background = glowGreen1;
+        if (glow2) gsap.to(glow2, { background: glowGreen2, duration: 0 }); glow2.style.background = glowGreen2;
+      } else {
+        gsap.to(blobMat.uniforms.uColor.value, { r: colorRed.r, g: colorRed.g, b: colorRed.b, duration: 1.2, ease: "power2.inOut" });
+        gsap.to(blobMat.uniforms.uColor2.value, { r: colorRedBright.r, g: colorRedBright.g, b: colorRedBright.b, duration: 1.2, ease: "power2.inOut" });
+        if (glow1) glow1.style.background = glowRed1;
+        if (glow2) glow2.style.background = glowRed2;
+      }
+    }, 3.3);
+
+    // Charts init (after loading completes)
+    loadTl.add(function() {
+      // Side mini charts
+      if (typeof Chart !== 'undefined') {
+        var chartColors = {
+          line: '#22D0DF',
+          bar: 'rgba(34,208,223,0.5)',
+          barAlt: 'rgba(47,212,141,0.5)',
+          grid: 'rgba(242,244,245,0.06)',
+          tick: 'rgba(242,244,245,0.4)'
+        };
+        var miniOpts = {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { display: false },
+            y: { display: false }
+          },
+          elements: { point: { radius: 0 } }
+        };
+        var velCvs = document.getElementById('ovChartVelocity');
+        if (velCvs) new Chart(velCvs, {
+          type: 'line',
+          data: {
+            labels: ['S18','S19','S20','S21','S22','S23','S24','S25'],
+            datasets: [{
+              data: [38,43,45,40,48,45,50,53],
+              borderColor: chartColors.line,
+              borderWidth: 2,
+              fill: true,
+              backgroundColor: 'rgba(34,208,223,0.08)',
+              tension: 0.4
+            }]
+          },
+          options: miniOpts
+        });
+        var depCvs = document.getElementById('ovChartDeploys');
+        if (depCvs) new Chart(depCvs, {
+          type: 'bar',
+          data: {
+            labels: ['Oct','Nov','Dic','Ene','Feb','Mar'],
+            datasets: [
+              { data: [45,52,60,68,75,82], backgroundColor: chartColors.bar, borderRadius: 3 },
+              { data: [18,22,28,35,42,48], backgroundColor: chartColors.barAlt, borderRadius: 3 }
+            ]
+          },
+          options: miniOpts
+        });
+        var bugCvs = document.getElementById('ovChartBugs');
+        if (bugCvs) new Chart(bugCvs, {
+          type: 'line',
+          data: {
+            labels: ['Oct','Nov','Dic','Ene','Feb','Mar'],
+            datasets: [
+              { data: [12,8,10,6,4,3], borderColor: '#E42269', borderWidth: 1.5, tension: 0.3, fill: false },
+              { data: [28,25,22,18,15,12], borderColor: '#E19C1B', borderWidth: 1.5, tension: 0.3, fill: false },
+              { data: [45,42,38,35,30,28], borderColor: 'rgba(242,244,245,0.3)', borderWidth: 1.5, tension: 0.3, fill: false }
+            ]
+          },
+          options: miniOpts
+        });
+      }
+    }, 3.6);
+
+    // ── Background glow color based on metrics ──
+    var glow1 = document.getElementById('ovBgGlow1');
+    var glow2 = document.getElementById('ovBgGlow2');
+    function updateBgGlow() {
+      var score = (ACTIVE_USER.attend + ACTIVE_USER.punct) / 2;
+      var c1, c2;
+      if (score >= 90) {
+        c1 = 'radial-gradient(ellipse,rgba(34,208,223,0.5) 0%,rgba(47,212,141,0.25) 40%,transparent 70%)';
+        c2 = 'radial-gradient(ellipse,rgba(47,212,141,0.4) 0%,rgba(34,208,223,0.15) 40%,transparent 70%)';
+      } else if (score >= 75) {
+        c1 = 'radial-gradient(ellipse,rgba(225,156,27,0.5) 0%,rgba(228,34,105,0.2) 40%,transparent 70%)';
+        c2 = 'radial-gradient(ellipse,rgba(228,34,105,0.4) 0%,rgba(225,156,27,0.15) 40%,transparent 70%)';
+      } else {
+        c1 = 'radial-gradient(ellipse,rgba(228,34,105,0.55) 0%,rgba(255,68,68,0.25) 40%,transparent 70%)';
+        c2 = 'radial-gradient(ellipse,rgba(255,68,68,0.45) 0%,rgba(228,34,105,0.2) 40%,transparent 70%)';
+      }
+      if (glow1) glow1.style.background = c1;
+      if (glow2) glow2.style.background = c2;
+    }
+    updateBgGlow();
+
+    // ── View Toggle: Immersive <-> Bento ──
+    var bentoView = document.getElementById('ovBentoView');
+    var metricsBtn = document.getElementById('ovMetricsBtn');
+    var bentoHeroCard = document.getElementById('bentoHeroCard');
+    var bentoChartBuilt = false;
+
+    function showBento() {
+      if (!bentoView) return;
+      var ovEl = document.getElementById('overview');
+      // Switch overview to normal flow
+      if (ovEl) ovEl.classList.add('ov-bento-mode');
+      bentoView.classList.add('active');
+      // Hide immersive elements
+      if (glow1) glow1.style.display = 'none';
+      if (glow2) glow2.style.display = 'none';
+      var gfxEl = document.getElementById('ovGfx');
+      if (gfxEl) gfxEl.style.display = 'none';
+      var bannerEl = document.getElementById('ovBanner');
+      if (bannerEl) bannerEl.style.display = 'none';
+      var loadingEl2 = document.getElementById('ovLoading');
+      if (loadingEl2) loadingEl2.style.display = 'none';
+      var scrollEl2 = document.getElementById('ovScroll');
+      if (scrollEl2) scrollEl2.style.display = 'none';
+      neuralRunning = false;
+      // Build timeline chart in bento if not done
+      if (!bentoChartBuilt && typeof Chart !== 'undefined') {
+        bentoChartBuilt = true;
+        var btCvs = document.getElementById('bentoTimelineChart');
+        if (btCvs) {
+          var c2 = typeof getTC === 'function' ? getTC() : { grid:'rgba(200,200,200,0.1)', text:'#999', pb:'#fff' };
+          new Chart(btCvs, {
+            type: 'bar',
+            data: {
+              labels: ['Abr','May','Jun','Jul','Ago','Sep'],
+              datasets: [
+                { label:'Ingresos', data:[3200,4100,3800,5200,4600,5800], backgroundColor: TM.dark() ? '#1A4D8A':'#A3CDFF', borderRadius:6, barPercentage:0.6 },
+                { label:'Proyeccion', type:'line', data:[2800,3600,3200,4800,4200,5400], borderColor:'#FF9500', borderWidth:2, fill:false, tension:0.4, pointRadius:3 }
+              ]
+            },
+            options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color: c2.text, font:{size:11} }}}, scales:{ y:{grid:{color:c2.grid},ticks:{color:c2.text,font:{size:11}}}, x:{grid:{display:false},ticks:{color:c2.text,font:{size:11}}} }}
+          });
+        }
+      }
+      // Init mini hero particle canvas
+      initHeroBentoCanvas();
+      // Reveal bento cards with stagger
+      bentoView.querySelectorAll('[data-reveal]').forEach(function(el, i) {
+        setTimeout(function() { el.classList.add('visible'); }, 80 + i * 60);
+      });
+      // Init bar sparkline
+      var bsContainer = document.getElementById('bentoBarSparkline');
+      if (bsContainer && !bsContainer.hasChildNodes()) {
+        var bsData = [35, 50, 40, 70, 55, 80, 65, 90, 45, 60, 75, 85];
+        var bsMax = Math.max.apply(null, bsData);
+        bsData.forEach(function(v, i) {
+          var bar = document.createElement('div');
+          bar.className = 'bv2-bar';
+          bar.style.height = '0%';
+          bsContainer.appendChild(bar);
+          setTimeout(function() { bar.style.height = Math.round((v / bsMax) * 100) + '%'; }, 200 + i * 50);
+        });
+      }
+      // Init wave bars
+      var wbContainer = document.getElementById('bentoWaveBars');
+      if (wbContainer && !wbContainer.hasChildNodes()) {
+        for (var wi = 0; wi < 24; wi++) {
+          var wbar = document.createElement('div');
+          wbar.className = 'bv2-wbar';
+          wbar.style.animationDelay = (wi * 0.08) + 's';
+          wbContainer.appendChild(wbar);
+        }
+      }
+    }
+
+    function hideBento() {
+      if (!bentoView) return;
+      var ovEl = document.getElementById('overview');
+      if (ovEl) ovEl.classList.remove('ov-bento-mode');
+      bentoView.classList.remove('active');
+      // Restore immersive elements
+      if (glow1) glow1.style.display = '';
+      if (glow2) glow2.style.display = '';
+      var gfxEl = document.getElementById('ovGfx');
+      if (gfxEl) gfxEl.style.display = '';
+      var bannerEl = document.getElementById('ovBanner');
+      if (bannerEl) bannerEl.style.display = '';
+      var scrollEl2 = document.getElementById('ovScroll');
+      if (scrollEl2) scrollEl2.style.display = '';
+      neuralRunning = true;
+      // Resize renderer to fit
+      setTimeout(function() { if (typeof resizeRenderer === 'function') resizeRenderer(); }, 100);
+    }
+
+    if (metricsBtn) metricsBtn.addEventListener('click', showBento);
+    if (bentoHeroCard) bentoHeroCard.addEventListener('click', hideBento);
+
+    // Apply status color to hero card
+    if (bentoHeroCard) {
+      bentoHeroCard.classList.add(showGood ? 'status-good' : 'status-crit');
+    }
+
+    // Mini particle canvas for bento hero card
+    var heroBentoInited = false;
+    function initHeroBentoCanvas() {
+      if (heroBentoInited) return;
+      heroBentoInited = true;
+      var hCvs = document.getElementById('heroBentoCanvas');
+      if (!hCvs || typeof THREE === 'undefined') return;
+      var hRect = hCvs.parentElement.getBoundingClientRect();
+      var hR = new THREE.WebGLRenderer({ canvas: hCvs, alpha: true, antialias: true });
+      hR.setSize(hRect.width, hRect.height);
+      hR.setPixelRatio(Math.min(devicePixelRatio, 2));
+      hR.setClearColor(0x000000, 0);
+      var hS = new THREE.Scene();
+      var hC = new THREE.PerspectiveCamera(50, hRect.width / hRect.height, 0.1, 100);
+      hC.position.set(0, 0, 18);
+      // Small particle blob
+      var count = 800;
+      var hPos = new Float32Array(count * 3);
+      for (var i = 0; i < count; i++) {
+        var th = Math.random() * Math.PI * 2;
+        var ph = Math.acos(2 * Math.random() - 1);
+        var r = 3.5 + Math.random() * 1;
+        hPos[i*3] = r * Math.sin(ph) * Math.cos(th);
+        hPos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
+        hPos[i*3+2] = r * Math.cos(ph);
+      }
+      var hGeo = new THREE.BufferGeometry();
+      hGeo.setAttribute('position', new THREE.BufferAttribute(hPos, 3));
+      var hMat = new THREE.PointsMaterial({ color: blobMat.uniforms.uColor.value, size: 1.5, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
+      var hPts = new THREE.Points(hGeo, hMat);
+      hS.add(hPts);
+      var hTime = 0;
+      function animH() {
+        requestAnimationFrame(animH);
+        hTime += 0.005;
+        hPts.rotation.y = hTime * 0.3;
+        hR.render(hS, hC);
+      }
+      animH();
+      new ResizeObserver(function(e) {
+        var w = e[0].contentRect.width, h = e[0].contentRect.height;
+        if (w && h) { hR.setSize(w, h); hC.aspect = w / h; hC.updateProjectionMatrix(); }
+      }).observe(hCvs.parentElement);
+    }
+
+    // ── Exposed API ──
+    window._neuralScene = { blobMat: blobMat, renderer: renderer };
+    window._cancelNeuralAnim = function() { cancelAnimationFrame(neuralAnimId); };
+    window._neuralPause = function() { neuralRunning = false; };
+    window._neuralResume = function() { neuralRunning = true; };
+    window._neuralEntrance = function() {};
+
+    // ── Resize ──
+    function resizeRenderer() {
+      var r = ovEl ? ovEl.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+      W = r.width || window.innerWidth;
+      H = r.height || window.innerHeight;
+      renderer.setSize(W, H);
+      camera.aspect = W / H;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resizeRenderer);
+    // Also resize when sidebar toggles
+    var sidebarToggleBtn = document.getElementById('sidebarToggle');
+    if (sidebarToggleBtn) sidebarToggleBtn.addEventListener('click', function() { setTimeout(resizeRenderer, 350); });
+
   })();
 
   // ===== BAR SPARKLINE =====
@@ -2543,27 +3061,10 @@ function renderCatalogGrid() {
     });
   })();
 
-  // ===== THEME CHANGE HOOK for hero particles =====
+  // ===== THEME CHANGE HOOK =====
   const origOnChange = TM.onChange.bind(TM);
   TM.onChange = function () {
     origOnChange();
-    // Update hero particles
-    if (window._heroParticles) {
-      const dk = TM.dark();
-      const hp = window._heroParticles;
-      hp.mat.opacity = dk ? 0.6 : 0.35;
-      hp.mat.blending = dk ? THREE.AdditiveBlending : THREE.NormalBlending;
-      hp.mat.needsUpdate = true;
-      const newPal = dk
-        ? [[0.04, 0.52, 1], [0.37, 0.36, 0.9], [0.75, 0.35, 0.95], [0.19, 0.82, 0.35]]
-        : [[0, 0.48, 1], [0.34, 0.34, 0.84], [0.69, 0.32, 0.87], [0.35, 0.55, 0.8]];
-      const ca = hp.geo.getAttribute('color');
-      for (let i = 0; i < ca.count; i++) {
-        const c = newPal[Math.floor(Math.random() * newPal.length)];
-        ca.array[i * 3] = c[0]; ca.array[i * 3 + 1] = c[1]; ca.array[i * 3 + 2] = c[2];
-      }
-      ca.needsUpdate = true;
-    }
     // Rebuild the timeline chart with updated theme colors
     const cvs = document.getElementById('timelineChart');
     if (cvs && typeof Chart !== 'undefined') {
